@@ -1,0 +1,25 @@
+[Unit]
+Description=CupidGPT Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=cupidgpt
+Group=cupidgpt
+WorkingDirectory=/opt/cupidgpt
+Environment=PATH=/opt/cupidgpt/.venv/bin
+ExecStart=/opt/cupidgpt/.venv/bin/python /opt/cupidgpt/src/bot.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/cupidgpt/data /opt/cupidgpt/logs
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
