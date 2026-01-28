@@ -58,7 +58,7 @@ def test_imports():
     """Test if all required modules can be imported."""
     required_modules = [
         'telegram',
-        'openai',
+        'google.generativeai',
         'sqlite3',
         'schedule',
         'dotenv'
@@ -90,7 +90,7 @@ def initialize_database():
 
 def validate_env_file():
     """Validate .env file has required variables."""
-    required_vars = ['TELEGRAM_BOT_TOKEN', 'OPENAI_API_KEY']
+    required_vars = ['TELEGRAM_BOT_TOKEN', 'GEMINI_API_KEY']
     
     if not os.path.exists('.env'):
         print("❌ .env file not found!")

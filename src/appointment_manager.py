@@ -2,13 +2,13 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from database import DatabaseManager
-from openai_client import OpenAIClient
+from llm_client import LLMClient
 
 
 class AppointmentManager:
     """Manages appointment creation, retrieval, and operations."""
     
-    def __init__(self, db: DatabaseManager, openai_client: OpenAIClient):
+    def __init__(self, db: DatabaseManager, openai_client: LLMClient):
         self.db = db
         self.openai_client = openai_client
     

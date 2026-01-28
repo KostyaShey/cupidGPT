@@ -1,13 +1,13 @@
 import logging
 from typing import Dict, Any, List, Optional
 from database import DatabaseManager
-from openai_client import OpenAIClient
+from llm_client import LLMClient
 
 
 class ChecklistManager:
     """Manages checklist creation, item management, and operations."""
     
-    def __init__(self, db: DatabaseManager, openai_client: OpenAIClient):
+    def __init__(self, db: DatabaseManager, openai_client: LLMClient):
         self.db = db
         self.openai_client = openai_client
     

@@ -1,6 +1,6 @@
 # CupidGPT - Couple's Appointment & Checklist Bot
 
-A sophisticated Telegram bot designed to help couples manage appointments and shared checklists using natural language processing powered by OpenAI's ChatGPT.
+A sophisticated Telegram bot designed to help couples manage appointments and shared checklists using natural language processing powered by Google's Gemini API.
 
 ## 🌟 Features
 
@@ -25,7 +25,7 @@ A sophisticated Telegram bot designed to help couples manage appointments and sh
 ### Prerequisites
 - Python 3.8 or higher
 - Telegram Bot Token (from [@BotFather](https://t.me/botfather))
-- OpenAI API Key
+- Google Gemini API Key
 - Virtual environment support
 
 ### Installation
@@ -55,7 +55,7 @@ A sophisticated Telegram bot designed to help couples manage appointments and sh
    Edit `.env` file with your credentials:
    ```env
    TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-   OPENAI_API_KEY=your_openai_api_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
    DATABASE_PATH=data/cupidgpt.db
    LOG_LEVEL=INFO
    LOG_FILE=logs/cupidgpt.log
@@ -78,10 +78,10 @@ A sophisticated Telegram bot designed to help couples manage appointments and sh
 3. Choose a name and username for your bot
 4. Copy the provided token to your `.env` file
 
-#### OpenAI API Key
-1. Visit [OpenAI Platform](https://platform.openai.com/)
-2. Sign up or log in to your account
-3. Navigate to API Keys section
+#### Google Gemini API Key
+1. Visit [Google AI Studio](https://aistudio.google.com/)
+2. Sign in with your Google account
+3. Click "Get API key"
 4. Create a new API key
 5. Copy the key to your `.env` file
 
@@ -90,7 +90,7 @@ A sophisticated Telegram bot designed to help couples manage appointments and sh
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TELEGRAM_BOT_TOKEN` | Your Telegram bot token | Required |
-| `OPENAI_API_KEY` | Your OpenAI API key | Required |
+| `GEMINI_API_KEY` | Your Google Gemini API key | Required |
 | `DATABASE_PATH` | SQLite database file path | `data/cupidgpt.db` |
 | `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
 | `LOG_FILE` | Log file path | `logs/cupidgpt.log` |
@@ -147,7 +147,7 @@ cupidGPT/
 │   ├── user_manager.py        # User registration and pairing
 │   ├── appointment_manager.py # Appointment CRUD operations
 │   ├── checklist_manager.py   # Checklist management
-│   ├── openai_client.py       # OpenAI API integration
+│   ├── llm_client.py          # Google Gemini API integration
 │   └── reminder_service.py    # Notification system
 ├── config/                    # Configuration files
 ├── data/                      # Database storage
@@ -227,7 +227,7 @@ tail -f logs/cupidgpt.log
 ### Adding New Features
 
 1. **Database Changes**: Update `database.py` with new tables/columns
-2. **API Integration**: Extend `openai_client.py` for new AI features
+2. **API Integration**: Extend `llm_client.py` for new AI features
 3. **Bot Commands**: Add handlers in `bot.py`
 4. **Business Logic**: Implement in respective manager classes
 
@@ -240,9 +240,9 @@ tail -f logs/cupidgpt.log
 - Verify the bot is running (`python src/bot.py`)
 - Check logs for error messages
 
-#### OpenAI API Errors
-- Verify API key is valid and has credits
-- Check rate limits and usage quotas
+#### Google Gemini API Errors
+- Verify API key is valid
+- Check quota limits and billing (if applicable)
 - Monitor logs for specific error messages
 
 #### Database Issues
@@ -260,7 +260,7 @@ tail -f logs/cupidgpt.log
 Add these environment variables for verbose debugging:
 ```env
 LOG_LEVEL=DEBUG
-OPENAI_DEBUG=true
+GEMINI_DEBUG=true
 ```
 
 ### Log Locations
@@ -276,9 +276,9 @@ OPENAI_DEBUG=true
 - Regular database backups recommended
 
 ### API Rate Limits
-- OpenAI API has usage limits
+- Google Gemini API has usage/rate limits
 - Implement caching for repeated queries
-- Monitor API usage in OpenAI dashboard
+- Check Google AI Studio for usage stats
 
 ### Memory Usage
 - Bot maintains minimal memory footprint
@@ -323,7 +323,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🙏 Acknowledgments
 
 - [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) - Telegram Bot API wrapper
-- [OpenAI](https://openai.com/) - Natural language processing
+- [Google Gemini](https://deepmind.google/technologies/gemini/) - Natural language processing
 - [SQLite](https://www.sqlite.org/) - Database engine
 
 ## 📞 Support

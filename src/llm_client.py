@@ -1,17 +1,24 @@
 import json
 import logging
+import os
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 import re
-from openai import AsyncOpenAI
+import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
-
-class OpenAIClient:
-    """Handles OpenAI API interactions for natural language processing."""
+class LLMClient:
+    """Handles Google Gemini API interactions for natural language processing."""
     
     def __init__(self, api_key: str):
-        self.client = AsyncOpenAI(api_key=api_key)
-        self.model = "gpt-3.5-turbo"
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel('gemini-flash-latest')
+        self.safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        }
     
     async def determine_intent(self, text: str) -> Dict[str, Any]:
         """Determine the user's intent from natural language text."""
@@ -38,14 +45,13 @@ Examples:
 - "Grocery list: apples, bananas" -> checklist
 """
             
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=200
+            response = await self.model.generate_content_async(
+                prompt,
+                generation_config={"response_mime_type": "application/json", "temperature": 0.1},
+                safety_settings=self.safety_settings
             )
             
-            result = json.loads(response.choices[0].message.content)
+            result = json.loads(response.text)
             return result
             
         except Exception as e:
@@ -97,14 +103,13 @@ Examples:
 }}
 """
             
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=400
+            response = await self.model.generate_content_async(
+                prompt,
+                generation_config={"response_mime_type": "application/json", "temperature": 0.1},
+                safety_settings=self.safety_settings
             )
             
-            result = json.loads(response.choices[0].message.content)
+            result = json.loads(response.text)
             
             # Validate and format the result
             if result.get('success'):
@@ -173,14 +178,13 @@ Examples:
 }}
 """
             
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=400
+            response = await self.model.generate_content_async(
+                prompt,
+                generation_config={"response_mime_type": "application/json", "temperature": 0.1},
+                safety_settings=self.safety_settings
             )
             
-            result = json.loads(response.choices[0].message.content)
+            result = json.loads(response.text)
             
             # Validate result
             if result.get('success'):
@@ -231,14 +235,13 @@ Handle expressions like:
 - "tonight at 8"
 """
             
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=150
+            response = await self.model.generate_content_async(
+                prompt,
+                generation_config={"response_mime_type": "application/json", "temperature": 0.1},
+                safety_settings=self.safety_settings
             )
             
-            result = json.loads(response.choices[0].message.content)
+            result = json.loads(response.text)
             
             if result.get('success') and result.get('datetime'):
                 return datetime.strptime(result['datetime'], "%Y-%m-%d %H:%M")
@@ -260,7 +263,6 @@ Handle expressions like:
                 return {"links": [], "success": True}
             
             # For now, just return the URLs found
-            # In a full implementation, you might fetch and analyze the content
             return {
                 "links": urls,
                 "success": True,
@@ -291,14 +293,13 @@ Provide brief suggestions for:
 Keep response under 100 words.
 """
             
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=150
+            response = await self.model.generate_content_async(
+                prompt,
+                generation_config={"temperature": 0.3},
+                safety_settings=self.safety_settings
             )
             
-            return response.choices[0].message.content
+            return response.text
             
         except Exception as e:
             logging.error(f"Error suggesting appointment improvements: {e}")

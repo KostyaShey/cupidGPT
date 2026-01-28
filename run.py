@@ -22,7 +22,7 @@ def check_configuration():
     from dotenv import load_dotenv
     load_dotenv()
     
-    required_vars = ['TELEGRAM_BOT_TOKEN', 'OPENAI_API_KEY']
+    required_vars = ['TELEGRAM_BOT_TOKEN', 'GEMINI_API_KEY']
     missing_vars = []
     
     for var in required_vars:
