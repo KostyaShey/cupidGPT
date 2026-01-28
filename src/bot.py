@@ -219,8 +219,18 @@ Type `/help` anytime to see this message again.
         """Handle /list_appointments command."""
         appointments = await self.appointment_manager.get_user_appointments(update.effective_user.id)
         
+        # Create Appointments submenu keyboard
+        keyboard = [
+            [KeyboardButton("Create new appointment"), KeyboardButton("Show upcoming appointments")],
+            [KeyboardButton("Back")]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        
         if not appointments:
-            await update.message.reply_text("📅 No upcoming appointments found.")
+            await update.message.reply_text(
+                "📅 No upcoming appointments found.",
+                reply_markup=reply_markup
+            )
             return
         
         message = "📅 *Upcoming Appointments:*\n\n"
@@ -232,7 +242,11 @@ Type `/help` anytime to see this message again.
                 message += f"  📝 {apt['description']}\n"
             message += f"  👤 Created by: {apt.get('creator_name', 'Unknown')}\n\n"
         
-        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(
+            message, 
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
+        )
     
     async def new_checklist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /new_checklist command."""
@@ -259,8 +273,18 @@ Type `/help` anytime to see this message again.
         """Handle /view_checklist command."""
         checklists = await self.checklist_manager.get_user_checklists(update.effective_user.id)
         
+        # Create Checklists submenu keyboard
+        keyboard = [
+            [KeyboardButton("Create new checklist"), KeyboardButton("Show existing Checklists")],
+            [KeyboardButton("Back")]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        
         if not checklists:
-            await update.message.reply_text("✅ No checklists found.")
+            await update.message.reply_text(
+                "✅ No checklists found.",
+                reply_markup=reply_markup
+            )
             return
         
         # For now, just show the first checklist
@@ -278,7 +302,11 @@ Type `/help` anytime to see this message again.
             if item['completed'] and item.get('completed_by_name'):
                 message += f"   └ Completed by {item['completed_by_name']}\n"
         
-        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(
+            message, 
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
+        )
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages with navigation and natural language processing."""
@@ -388,16 +416,27 @@ Type `/help` anytime to see this message again.
             )
             context.user_data.pop('waiting_for', None)
             
+            # Create Appointments submenu keyboard
+            keyboard = [
+                [KeyboardButton("Create new appointment"), KeyboardButton("Show upcoming appointments")],
+                [KeyboardButton("Back")]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            
             if result['success']:
                 await update.message.reply_text(
                     f"✅ Appointment created successfully!\n\n"
                     f"📅 *{result['appointment']['title']}*\n"
                     f"🕐 {result['appointment']['appointment_date']}\n"
                     f"📍 {result['appointment'].get('location', 'No location')}",
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=reply_markup
                 )
             else:
-                await update.message.reply_text(f"❌ {result['message']}")
+                await update.message.reply_text(
+                    f"❌ {result['message']}",
+                    reply_markup=reply_markup
+                )
         
         elif waiting_for == 'checklist':
             result = await self.checklist_manager.create_checklist_from_text(
@@ -405,15 +444,26 @@ Type `/help` anytime to see this message again.
             )
             context.user_data.pop('waiting_for', None)
             
+            # Create Checklists submenu keyboard
+            keyboard = [
+                [KeyboardButton("Create new checklist"), KeyboardButton("Show existing Checklists")],
+                [KeyboardButton("Back")]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            
             if result['success']:
                 await update.message.reply_text(
                     f"✅ Checklist created successfully!\n\n"
                     f"📋 *{result['checklist']['title']}*\n"
                     f"Items: {len(result['items'])}",
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=reply_markup
                 )
             else:
-                await update.message.reply_text(f"❌ {result['message']}")
+                await update.message.reply_text(
+                    f"❌ {result['message']}",
+                    reply_markup=reply_markup
+                )
         
         else:
             # General natural language processing

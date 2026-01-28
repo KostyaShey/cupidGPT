@@ -90,11 +90,22 @@ class DatabaseManager:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                
+                # First, try to insert the user (will be ignored if telegram_id already exists)
                 cursor.execute("""
-                    INSERT OR REPLACE INTO users 
+                    INSERT OR IGNORE INTO users 
                     (telegram_id, username, first_name, last_name)
                     VALUES (?, ?, ?, ?)
                 """, (telegram_id, username, first_name, last_name))
+                
+                # Then update the user information to keep it current
+                # This preserves the original ID while updating other fields
+                cursor.execute("""
+                    UPDATE users 
+                    SET username = ?, first_name = ?, last_name = ?
+                    WHERE telegram_id = ?
+                """, (username, first_name, last_name, telegram_id))
+                
                 conn.commit()
                 return True
         except sqlite3.Error as e:
