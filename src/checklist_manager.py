@@ -157,20 +157,7 @@ class ChecklistManager:
     async def get_checklist_by_id(self, checklist_id: int) -> Optional[Dict[str, Any]]:
         """Get a specific checklist by ID."""
         try:
-            import sqlite3
-            with sqlite3.connect(self.db.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT c.*, u.first_name as creator_name
-                    FROM checklists c
-                    JOIN users u ON c.created_by = u.id
-                    WHERE c.id = ?
-                """, (checklist_id,))
-                
-                row = cursor.fetchone()
-                return dict(row) if row else None
-                
+            return self.db.get_checklist_by_id(checklist_id)
         except Exception as e:
             logging.error(f"Error getting checklist by ID: {e}")
             return None
@@ -236,24 +223,17 @@ class ChecklistManager:
         """Remove an item from a checklist."""
         try:
             # Get item and checklist info
-            import sqlite3
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT ci.checklist_id, c.created_by, c.shared_with
-                    FROM checklist_items ci
-                    JOIN checklists c ON ci.checklist_id = c.id
-                    WHERE ci.id = ?
-                """, (item_id,))
-                
-                result = cursor.fetchone()
-                if not result:
-                    return {
-                        'success': False,
-                        'message': 'Item not found'
-                    }
-                
-                checklist_id, created_by, shared_with = result
+            # Get item and checklist info
+            item = self.db.get_checklist_item(item_id)
+            if not item:
+                return {
+                    'success': False,
+                    'message': 'Item not found'
+                }
+            
+            checklist_id = item['checklist_id']
+            created_by = item['created_by']
+            shared_with = item['shared_with']
             
             # Check permissions
             user = self.db.get_user_by_telegram_id(user_telegram_id)
@@ -271,10 +251,11 @@ class ChecklistManager:
                 }
             
             # Remove the item
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM checklist_items WHERE id = ?", (item_id,))
-                conn.commit()
+            if not self.db.remove_checklist_item(item_id):
+                 return {
+                    'success': False,
+                    'message': 'Failed to remove item'
+                }
             
             logging.info(f"Item {item_id} removed from checklist {checklist_id} by user {user_telegram_id}")
             
@@ -315,12 +296,12 @@ class ChecklistManager:
                     'message': 'Only the creator can delete a checklist'
                 }
             
-            import sqlite3
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                # Delete checklist (items will be deleted due to CASCADE)
-                cursor.execute("DELETE FROM checklists WHERE id = ?", (checklist_id,))
-                conn.commit()
+            # Delete checklist (items will be deleted due to CASCADE)
+            if not self.db.delete_checklist(checklist_id):
+                 return {
+                    'success': False,
+                    'message': 'Failed to delete checklist'
+                }
             
             logging.info(f"Checklist {checklist_id} deleted by user {user_telegram_id}")
             

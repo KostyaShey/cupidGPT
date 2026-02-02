@@ -168,20 +168,7 @@ class AppointmentManager:
     async def get_appointment_by_id(self, appointment_id: int) -> Optional[Dict[str, Any]]:
         """Get a specific appointment by ID."""
         try:
-            import sqlite3
-            with sqlite3.connect(self.db.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT a.*, u.first_name as creator_name
-                    FROM appointments a
-                    JOIN users u ON a.created_by = u.id
-                    WHERE a.id = ?
-                """, (appointment_id,))
-                
-                row = cursor.fetchone()
-                return dict(row) if row else None
-                
+            return self.db.get_appointment_by_id(appointment_id)
         except Exception as e:
             logging.error(f"Error getting appointment by ID: {e}")
             return None
@@ -230,12 +217,11 @@ class AppointmentManager:
             
             update_values.append(appointment_id)
             
-            import sqlite3
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                query = f"UPDATE appointments SET {', '.join(update_fields)} WHERE id = ?"
-                cursor.execute(query, update_values)
-                conn.commit()
+            if not self.db.update_appointment(appointment_id, updates):
+                return {
+                    'success': False,
+                    'message': 'Failed to update appointment'
+                }
             
             logging.info(f"Appointment {appointment_id} updated by user {user_telegram_id}")
             
@@ -276,11 +262,11 @@ class AppointmentManager:
                     'message': 'Only the creator can delete an appointment'
                 }
             
-            import sqlite3
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM appointments WHERE id = ?", (appointment_id,))
-                conn.commit()
+            if not self.db.delete_appointment(appointment_id):
+                return {
+                    'success': False,
+                    'message': 'Failed to delete appointment'
+                }
             
             logging.info(f"Appointment {appointment_id} deleted by user {user_telegram_id}")
             
@@ -309,21 +295,7 @@ class AppointmentManager:
             
             user_id = user['id']
             
-            import sqlite3
-            with sqlite3.connect(self.db.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT a.*, u.first_name as creator_name
-                    FROM appointments a
-                    JOIN users u ON a.created_by = u.id
-                    WHERE (a.created_by = ? OR a.shared_with = ?)
-                    AND a.appointment_date >= ? AND a.appointment_date < ?
-                    ORDER BY a.appointment_date ASC
-                """, (user_id, user_id, start_date.isoformat(), end_date.isoformat()))
-                
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
+            return self.db.get_appointments_in_range(user_id, start_date, end_date)
                 
         except Exception as e:
             logging.error(f"Error getting appointments for date: {e}")
@@ -343,25 +315,44 @@ class AppointmentManager:
             
             user_id = user['id']
             
-            import sqlite3
-            with sqlite3.connect(self.db.db_path) as conn:
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT a.*, u.first_name as creator_name
-                    FROM appointments a
-                    JOIN users u ON a.created_by = u.id
-                    WHERE (a.created_by = ? OR a.shared_with = ?)
-                    AND (
-                        (a.appointment_date <= ? AND datetime(a.appointment_date, '+60 minutes') > ?)
-                        OR (a.appointment_date < ? AND a.appointment_date >= ?)
-                    )
-                    ORDER BY a.appointment_date ASC
-                """, (user_id, user_id, start_time.isoformat(), start_time.isoformat(),
-                     end_time.isoformat(), start_time.isoformat()))
+            # Get appointments in the range
+            appointments = self.db.get_appointments_in_range(user_id, start_time, end_time)
+            
+            # Since get_appointments_in_range is simple, we might need to filter manually if the conflict logic is complex
+            # But for now, let's assume any overlap is a conflict. 
+            # The original query checked for overlap. The helper gets appointments STARTING in range.
+            # We need to refine this slightly or update the helper. The original query logic was:
+            # (start_date <= start_time AND end_date > start_time) OR (start_date < end_time AND start_date >= start_time)
+            
+            # Actually, to avoid changing behavior too much let's keep it simple.
+            # If the helper returns appointments where date >= start and date < end, that covers "starts during the new appointment"
+            # It misses "started before new appointment and ends during/after".
+            
+            # Let's adjust the simple helper usage for now. 
+            # Ideally, get_appointments_in_range should probably take an overlap check, but strictly speaking "in range" usually means "starts in range".
+            
+            # For this specific case, let's check for "conflicting" appointments properly by fetching appointments around the time.
+            # A broad fetch then filter in python might be safer if we want to rely on the simple helper.
+            # Let's fetch appointments for the day, then filter.
+            
+            day_start = appointment_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day_start + timedelta(days=1)
+            day_appointments = self.db.get_appointments_in_range(user_id, day_start, day_end)
+            
+            conflicts = []
+            for apt in day_appointments:
+                apt_start = datetime.fromisoformat(apt['appointment_date'])
+                # Assuming 1 hour duration for existing appointments if not stored
+                # The schema doesn't seem to store duration?
+                # Ah, the original query assumed 60 minutes for existing appointments: datetime(a.appointment_date, '+60 minutes')
                 
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
+                apt_end = apt_start + timedelta(minutes=60)
+                
+                # Check overlap
+                if (apt_start < end_time and apt_end > start_time):
+                    conflicts.append(apt)
+            
+            return conflicts
                 
         except Exception as e:
             logging.error(f"Error checking conflicting appointments: {e}")

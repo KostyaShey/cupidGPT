@@ -408,3 +408,145 @@ class DatabaseManager:
         except sqlite3.Error as e:
             logging.error(f"Error marking reminder as sent: {e}")
             return False
+
+    def get_appointment_by_id(self, appointment_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific appointment by ID."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT a.*, u.first_name as creator_name
+                    FROM appointments a
+                    JOIN users u ON a.created_by = u.id
+                    WHERE a.id = ?
+                """, (appointment_id,))
+                
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            logging.error(f"Error getting appointment by ID: {e}")
+            return None
+
+    def update_appointment(self, appointment_id: int, updates: Dict[str, Any]) -> bool:
+        """Update an appointment."""
+        try:
+            if not updates:
+                return False
+
+            update_fields = []
+            update_values = []
+            
+            for field, value in updates.items():
+                if field in ['title', 'description', 'appointment_date', 'location']:
+                    update_fields.append(f"{field} = ?")
+                    update_values.append(value)
+            
+            if not update_fields:
+                return False
+            
+            update_values.append(appointment_id)
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                query = f"UPDATE appointments SET {', '.join(update_fields)} WHERE id = ?"
+                cursor.execute(query, update_values)
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            logging.error(f"Error updating appointment: {e}")
+            return False
+
+    def delete_appointment(self, appointment_id: int) -> bool:
+        """Delete an appointment."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM appointments WHERE id = ?", (appointment_id,))
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            logging.error(f"Error deleting appointment: {e}")
+            return False
+
+    def get_appointments_in_range(self, user_id: int, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """Get appointments within a specific date range."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT a.*, u.first_name as creator_name
+                    FROM appointments a
+                    JOIN users u ON a.created_by = u.id
+                    WHERE (a.created_by = ? OR a.shared_with = ?)
+                    AND a.appointment_date >= ? AND a.appointment_date < ?
+                    ORDER BY a.appointment_date ASC
+                """, (user_id, user_id, start_date.isoformat(), end_date.isoformat()))
+                
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logging.error(f"Error getting appointments in range: {e}")
+            return []
+
+    def get_checklist_by_id(self, checklist_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific checklist by ID."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT c.*, u.first_name as creator_name
+                    FROM checklists c
+                    JOIN users u ON c.created_by = u.id
+                    WHERE c.id = ?
+                """, (checklist_id,))
+                
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            logging.error(f"Error getting checklist by ID: {e}")
+            return None
+
+    def delete_checklist(self, checklist_id: int) -> bool:
+        """Delete a checklist."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM checklists WHERE id = ?", (checklist_id,))
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            logging.error(f"Error deleting checklist: {e}")
+            return False
+
+    def get_checklist_item(self, item_id: int) -> Optional[Dict[str, Any]]:
+        """Get a checklist item by ID along with checklist details."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT ci.*, ci.checklist_id, c.created_by, c.shared_with
+                    FROM checklist_items ci
+                    JOIN checklists c ON ci.checklist_id = c.id
+                    WHERE ci.id = ?
+                """, (item_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+        except sqlite3.Error as e:
+            logging.error(f"Error getting checklist item: {e}")
+            return None
+
+    def remove_checklist_item(self, item_id: int) -> bool:
+        """Remove an item from a checklist."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM checklist_items WHERE id = ?", (item_id,))
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            logging.error(f"Error removing checklist item: {e}")
+            return False

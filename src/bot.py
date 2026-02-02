@@ -1,8 +1,13 @@
 import os
 import logging
+import sqlite3
+from datetime import datetime
 from typing import Dict, Any
 from dotenv import load_dotenv
-from telegram import Update, BotCommand, ReplyKeyboardMarkup, KeyboardButton
+from telegram import (
+    Update, BotCommand, ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton
+)
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, 
     ContextTypes, filters, CallbackQueryHandler
@@ -87,6 +92,50 @@ class CupidGPTBot:
         # Error handler
         self.app.add_error_handler(self.error_handler)
     
+    def get_main_menu_keyboard(self):
+        """Returns the main menu inline keyboard."""
+        keyboard = [
+            [InlineKeyboardButton("📅 Appointments", callback_data="menu:appointments")],
+            [InlineKeyboardButton("✅ Checklists", callback_data="menu:checklists")],
+            [InlineKeyboardButton("⚙️ Settings", callback_data="menu:settings")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    def get_appointments_menu_keyboard(self):
+        """Returns the appointments submenu inline keyboard."""
+        keyboard = [
+            [InlineKeyboardButton("➕ Create new appointment", callback_data="action:new_appointment")],
+            [InlineKeyboardButton("📋 Show upcoming appointments", callback_data="action:list_appointments")],
+            [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="menu:main")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    def get_checklists_menu_keyboard(self):
+        """Returns the checklists submenu inline keyboard."""
+        keyboard = [
+            [InlineKeyboardButton("➕ Create new checklist", callback_data="action:new_checklist")],
+            [InlineKeyboardButton("📋 Show existing Checklists", callback_data="action:view_checklist")],
+            [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="menu:main")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    def get_settings_menu_keyboard(self):
+        """Returns the settings submenu inline keyboard."""
+        keyboard = [
+            [InlineKeyboardButton("🔗 Pair with a user", callback_data="action:pair")],
+            [InlineKeyboardButton("📊 Account status", callback_data="action:status")],
+            [InlineKeyboardButton("🔙 Back to Main Menu", callback_data="menu:main")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    def get_persistent_menu_keyboard(self):
+        """Returns the persistent reply keyboard for main navigation."""
+        keyboard = [
+            [KeyboardButton("📅 Appointments"), KeyboardButton("✅ Checklists")],
+            [KeyboardButton("🏠 Home")]
+        ]
+        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command."""
         user = update.effective_user
@@ -117,19 +166,15 @@ Use `/help` to see all available commands.
             """
             
             # Create keyboard
-            keyboard = [
-                [KeyboardButton("Appointments"), KeyboardButton("Checklists")],
-                [KeyboardButton("Settings")]
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            reply_markup = self.get_persistent_menu_keyboard()
 
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 welcome_message, 
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=reply_markup
             )
         else:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "❌ Sorry, there was an error registering your account. Please try again."
             )
     
@@ -163,12 +208,12 @@ I'll automatically parse your request and create appointments or checklist items
 Type `/help` anytime to see this message again.
         """
         
-        await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
+        await update.effective_message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
     
     async def pair_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /pair command."""
         if not context.args:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "Please provide your partner's username: `/pair @username`",
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -178,12 +223,12 @@ Type `/help` anytime to see this message again.
         result = await self.user_manager.pair_users(update.effective_user.id, partner_username)
         
         if result['success']:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 f"✅ {result['message']}",
                 parse_mode=ParseMode.MARKDOWN
             )
         else:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 f"❌ {result['message']}",
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -191,18 +236,18 @@ Type `/help` anytime to see this message again.
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /status command."""
         status = self.user_manager.get_user_status(update.effective_user.id)
-        await update.message.reply_text(status, parse_mode=ParseMode.MARKDOWN)
+        await update.effective_message.reply_text(status, parse_mode=ParseMode.MARKDOWN)
     
     async def new_appointment_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /new_appointment command."""
         if not self.debug_mode and not self.user_manager.is_user_paired(update.effective_user.id):
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "❌ You need to pair with your partner first. Use `/pair @username`",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "📅 *Creating New Appointment*\n\n"
             "Please describe your appointment. You can include:\n"
             "• Date and time\n"
@@ -219,17 +264,10 @@ Type `/help` anytime to see this message again.
         """Handle /list_appointments command."""
         appointments = await self.appointment_manager.get_user_appointments(update.effective_user.id)
         
-        # Create Appointments submenu keyboard
-        keyboard = [
-            [KeyboardButton("Create new appointment"), KeyboardButton("Show upcoming appointments")],
-            [KeyboardButton("Back")]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        
         if not appointments:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "📅 No upcoming appointments found.",
-                reply_markup=reply_markup
+                reply_markup=self.get_appointments_menu_keyboard()
             )
             return
         
@@ -242,22 +280,22 @@ Type `/help` anytime to see this message again.
                 message += f"  📝 {apt['description']}\n"
             message += f"  👤 Created by: {apt.get('creator_name', 'Unknown')}\n\n"
         
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             message, 
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=reply_markup
+            reply_markup=self.get_appointments_menu_keyboard()
         )
     
     async def new_checklist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /new_checklist command."""
         if not self.debug_mode and not self.user_manager.is_user_paired(update.effective_user.id):
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "❌ You need to pair with your partner first. Use `/pair @username`",
                 parse_mode=ParseMode.MARKDOWN
             )
             return
         
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "✅ *Creating New Checklist*\n\n"
             "Please provide:\n"
             "1. Checklist title\n"
@@ -273,17 +311,10 @@ Type `/help` anytime to see this message again.
         """Handle /view_checklist command."""
         checklists = await self.checklist_manager.get_user_checklists(update.effective_user.id)
         
-        # Create Checklists submenu keyboard
-        keyboard = [
-            [KeyboardButton("Create new checklist"), KeyboardButton("Show existing Checklists")],
-            [KeyboardButton("Back")]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        
         if not checklists:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "✅ No checklists found.",
-                reply_markup=reply_markup
+                reply_markup=self.get_checklists_menu_keyboard()
             )
             return
         
@@ -302,10 +333,10 @@ Type `/help` anytime to see this message again.
             if item['completed'] and item.get('completed_by_name'):
                 message += f"   └ Completed by {item['completed_by_name']}\n"
         
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             message, 
             parse_mode=ParseMode.MARKDOWN,
-            reply_markup=reply_markup
+            reply_markup=self.get_checklists_menu_keyboard()
         )
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -313,90 +344,16 @@ Type `/help` anytime to see this message again.
         user_id = update.effective_user.id
         message_text = update.message.text
         
-        # --- Navigation & Menus ---
+        # --- Navigation & Menus (Legacy Support/Text Fallback) ---
         
-        if message_text == "Appointments":
-            keyboard = [
-                [KeyboardButton("Create new appointment"), KeyboardButton("Show upcoming appointments")],
-                [KeyboardButton("Back")]
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-            await update.message.reply_text("📅 *Appointments Menu*", parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+        if await self._handle_menu_navigation(message_text, update):
             return
 
-        elif message_text == "Checklists":
-            keyboard = [
-                [KeyboardButton("Create new checklist"), KeyboardButton("Show existing Checklists")],
-                [KeyboardButton("Back")]
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-            await update.message.reply_text("✅ *Checklists Menu*", parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+        if await self._handle_menu_actions(message_text, update, context):
             return
 
-        elif message_text == "Settings":
-            keyboard = [
-                [KeyboardButton("Pair with a user"), KeyboardButton("Account status")],
-                [KeyboardButton("Back")]
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-            await update.message.reply_text("⚙️ *Settings Menu*", parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
+        if await self._handle_legacy_commands(message_text, update, context):
             return
-
-        elif message_text == "Back":
-            # Return to Main Menu
-            keyboard = [
-                [KeyboardButton("Appointments"), KeyboardButton("Checklists")],
-                [KeyboardButton("Settings")]
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-            await update.message.reply_text("🔙 *Main Menu*", parse_mode=ParseMode.MARKDOWN, reply_markup=reply_markup)
-            return
-
-        # --- Specific Actions (Leaf Nodes) ---
-
-        # Appointments Actions
-        elif message_text == "Create new appointment":
-            await self.new_appointment_command(update, context)
-            return
-        elif message_text == "Show upcoming appointments":
-            await self.list_appointments_command(update, context)
-            return
-
-        # Checklists Actions
-        elif message_text == "Create new checklist":
-            await self.new_checklist_command(update, context)
-            return
-        elif message_text == "Show existing Checklists":
-            await self.view_checklist_command(update, context)
-            return
-            
-        # Settings Actions
-        elif message_text == "Pair with a user":
-            await self.pair_command(update, context)
-            return
-        elif message_text == "Account status":
-            await self.status_command(update, context)
-            return
-            
-        # --- Legacy / Direct Commands (keep these if user manually types them or from old keyboard, though user requested specific structure) ---
-        elif message_text == "Pair": # Legacy support or if user types it
-             await self.pair_command(update, context)
-             return
-        elif message_text == "Status":
-             await self.status_command(update, context)
-             return
-        elif message_text == "New Appointment":
-             await self.new_appointment_command(update, context)
-             return
-        elif message_text == "List Appointments":
-             await self.list_appointments_command(update, context)
-             return
-        elif message_text == "New Checklist":
-             await self.new_checklist_command(update, context)
-             return
-        elif message_text == "View Checklists":
-             await self.view_checklist_command(update, context)
-             return
 
         # --- Logic Checks ---
         
@@ -404,72 +361,153 @@ Type `/help` anytime to see this message again.
         if not self.user_manager.is_user_paired(user_id):
             # Allow Pairing/Settings interactions even if not paired? 
             # If they are just navigating menus, we shouldn't block. 
-            # But deep actions (creating appointments) are already protected in their respective command handlers.
             pass 
         
         # Check if we're waiting for specific input
         waiting_for = context.user_data.get('waiting_for')
-        
+        if waiting_for:
+            await self._process_pending_input(message_text, waiting_for, update, context)
+            return
+
+        # General natural language processing
+        result = await self.process_natural_language(message_text, user_id)
+        await update.effective_message.reply_text(result, parse_mode=ParseMode.MARKDOWN)
+
+    async def _handle_menu_navigation(self, text: str, update: Update) -> bool:
+        """Handle main menu navigation commands."""
+        if text in ["Agendas", "📅 Appointments", "Appointments", "/appointments"]:
+            await update.effective_message.reply_text("📅 *Appointments Menu*", parse_mode=ParseMode.MARKDOWN, reply_markup=self.get_appointments_menu_keyboard())
+            return True
+        elif text in ["✅ Checklists", "Checklists", "/checklists"]:
+            await update.effective_message.reply_text("✅ *Checklists Menu*", parse_mode=ParseMode.MARKDOWN, reply_markup=self.get_checklists_menu_keyboard())
+            return True
+        elif text in ["Settings", "/settings"]:
+            await update.effective_message.reply_text("⚙️ *Settings Menu*", parse_mode=ParseMode.MARKDOWN, reply_markup=self.get_settings_menu_keyboard())
+            return True
+        elif text in ["🏠 Home", "Home", "Back"]:
+            await update.effective_message.reply_text("🏠 *Home*", parse_mode=ParseMode.MARKDOWN, reply_markup=self.get_main_menu_keyboard())
+            return True
+        return False
+
+    async def _handle_menu_actions(self, text: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+        """Handle specific menu actions."""
+        if text == "Create new appointment":
+            await self.new_appointment_command(update, context)
+            return True
+        elif text == "Show upcoming appointments":
+            await self.list_appointments_command(update, context)
+            return True
+        elif text == "Create new checklist":
+            await self.new_checklist_command(update, context)
+            return True
+        elif text == "Show existing Checklists":
+            await self.view_checklist_command(update, context)
+            return True
+        elif text == "Pair with a user":
+            await self.pair_command(update, context)
+            return True
+        elif text == "Account status":
+            await self.status_command(update, context)
+            return True
+        return False
+
+    async def _handle_legacy_commands(self, text: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+        """Handle legacy or direct commands."""
+        if text == "Pair": 
+             await self.pair_command(update, context)
+             return True
+        elif text == "Status":
+             await self.status_command(update, context)
+             return True
+        elif text == "New Appointment":
+             await self.new_appointment_command(update, context)
+             return True
+        elif text == "List Appointments":
+             await self.list_appointments_command(update, context)
+             return True
+        elif text == "New Checklist":
+             await self.new_checklist_command(update, context)
+             return True
+        elif text == "View Checklists":
+             await self.view_checklist_command(update, context)
+             return True
+        return False
+
+    async def _process_pending_input(self, text: str, waiting_for: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Process input when waiting for specific details."""
         if waiting_for == 'appointment':
-            result = await self.appointment_manager.create_appointment_from_text(
-                message_text, user_id
-            )
+             # Instead of creating immediately, extract details and ask for confirmation
+            details = await self.openai_client.extract_appointment_details(text)
             context.user_data.pop('waiting_for', None)
             
-            # Create Appointments submenu keyboard
-            keyboard = [
-                [KeyboardButton("Create new appointment"), KeyboardButton("Show upcoming appointments")],
-                [KeyboardButton("Back")]
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            if not details.get('success'):
+                await update.effective_message.reply_text(
+                    f"❌ {details.get('error', 'Failed to understand appointment details')}",
+                    reply_markup=self.get_appointments_menu_keyboard()
+                )
+                return
+
+            # Store details in user_data for callback access
+            context.user_data['pending_appointment'] = details
             
-            if result['success']:
-                await update.message.reply_text(
-                    f"✅ Appointment created successfully!\n\n"
-                    f"📅 *{result['appointment']['title']}*\n"
-                    f"🕐 {result['appointment']['appointment_date']}\n"
-                    f"📍 {result['appointment'].get('location', 'No location')}",
-                    parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=reply_markup
-                )
-            else:
-                await update.message.reply_text(
-                    f"❌ {result['message']}",
-                    reply_markup=reply_markup
-                )
-        
+            preview_msg = (
+                f"📅 *Confirm Appointment*\n\n"
+                f"Title: {details['title']}\n"
+                f"Date: {details['appointment_datetime']}\n"
+                f"Location: {details.get('location', 'Not specified')}\n"
+                f"Description: {details.get('description', 'None')}\n\n"
+                f"Does this look correct?"
+            )
+            
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ Confirm", callback_data="confirm:appointment"),
+                    InlineKeyboardButton("❌ Cancel", callback_data="cancel:appointment")
+                ]
+            ]
+            
+            await update.effective_message.reply_text(
+                preview_msg,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
         elif waiting_for == 'checklist':
-            result = await self.checklist_manager.create_checklist_from_text(
-                message_text, user_id
-            )
+             # Instead of creating immediately, extract details and ask for confirmation
+            details = await self.openai_client.extract_checklist_details(text)
             context.user_data.pop('waiting_for', None)
             
-            # Create Checklists submenu keyboard
-            keyboard = [
-                [KeyboardButton("Create new checklist"), KeyboardButton("Show existing Checklists")],
-                [KeyboardButton("Back")]
-            ]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+            if not details.get('success'):
+                await update.effective_message.reply_text(
+                    f"❌ {details.get('error', 'Failed to understand checklist details')}",
+                    reply_markup=self.get_checklists_menu_keyboard()
+                )
+                return
+
+            # Store details in user_data for callback access
+            context.user_data['pending_checklist'] = details
             
-            if result['success']:
-                await update.message.reply_text(
-                    f"✅ Checklist created successfully!\n\n"
-                    f"📋 *{result['checklist']['title']}*\n"
-                    f"Items: {len(result['items'])}",
-                    parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=reply_markup
-                )
-            else:
-                await update.message.reply_text(
-                    f"❌ {result['message']}",
-                    reply_markup=reply_markup
-                )
-        
-        else:
-            # General natural language processing
-            # Only do NLP if it's not one of the menu commands
-            result = await self.process_natural_language(message_text, user_id)
-            await update.message.reply_text(result, parse_mode=ParseMode.MARKDOWN)
+            items_str = "\\n".join([f"• {item}" for item in details['items']])
+            preview_msg = (
+                f"📋 *Confirm Checklist*\n\n"
+                f"Title: {details['title']}\n"
+                f"Description: {details.get('description', 'None')}\n\n"
+                f"Items:\n{items_str}\n\n"
+                f"Does this look correct?"
+            )
+            
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ Confirm", callback_data="confirm:checklist"),
+                    InlineKeyboardButton("❌ Cancel", callback_data="cancel:checklist")
+                ]
+            ]
+            
+            await update.effective_message.reply_text(
+                preview_msg,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     
     async def process_natural_language(self, text: str, user_id: int) -> str:
         """Process natural language input to determine intent."""
@@ -502,20 +540,179 @@ Type `/help` anytime to see this message again.
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle callback queries from inline keyboards."""
         query = update.callback_query
-        await query.answer()
+        user_id = update.effective_user.id
+        # We'll answer the query within specific branches to allow custom toast messages
         
         # Parse callback data
         data = query.data.split(':')
-        action = data[0]
+        category = data[0]
+        action = data[1]
         
-        if action == 'toggle_item':
-            item_id = int(data[1])
-            result = self.checklist_manager.toggle_item(item_id, update.effective_user.id)
+        if category == 'menu':
+            await self._handle_menu_callback(query, action)
+        elif category == 'action':
+            await self._handle_action_callback(query, action, update, context)
+        elif category == 'confirm':
+            await self._handle_confirm_callback(query, action, user_id, context)
+        elif category == 'cancel':
+            await self._handle_cancel_callback(query, action, context)
+        elif category == 'toggle_item':
+             await self._handle_toggle_item_callback(query, action, user_id)
+
+    async def _handle_menu_callback(self, query, action):
+        """Handle menu navigation callbacks."""
+        await query.answer()
+        if action == 'main':
+            await query.edit_message_text(
+                "🔙 *Main Menu*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=self.get_main_menu_keyboard()
+            )
+        elif action == 'appointments':
+            await query.edit_message_text(
+                "📅 *Appointments Menu*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=self.get_appointments_menu_keyboard()
+            )
+        elif action == 'checklists':
+            await query.edit_message_text(
+                "✅ *Checklists Menu*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=self.get_checklists_menu_keyboard()
+            )
+        elif action == 'settings':
+            await query.edit_message_text(
+                "⚙️ *Settings Menu*",
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=self.get_settings_menu_keyboard()
+            )
+
+    async def _handle_action_callback(self, query, action, update, context):
+        """Handle specific action callbacks."""
+        await query.answer()
+        if action == 'new_appointment':
+            await self.new_appointment_command(update, context)
+        elif action == 'list_appointments':
+            await self.list_appointments_command(update, context)
+        elif action == 'new_checklist':
+            await self.new_checklist_command(update, context)
+        elif action == 'view_checklist':
+            await self.view_checklist_command(update, context)
+        elif action == 'pair':
+            await self.pair_command(update, context)
+        elif action == 'status':
+            await self.status_command(update, context)
+
+    async def _handle_confirm_callback(self, query, action, user_id, context):
+        """Handle confirmation callbacks."""
+        if action == 'appointment':
+            details = context.user_data.pop('pending_appointment', None)
+            if not details:
+                await query.answer("❌ Error: Invitation expired.")
+                return
             
-            if result:
-                await query.edit_message_text("✅ Item status updated!")
+            # Actually create the appointment
+            appointment_datetime = datetime.fromisoformat(details['appointment_datetime'])
+            appointment_id = self.db.create_appointment(
+                title=details['title'],
+                description=details.get('description', ''),
+                appointment_date=appointment_datetime,
+                location=details.get('location', ''),
+                created_by_telegram_id=user_id
+            )
+            
+            if appointment_id:
+                await query.answer("✅ Appointment created successfully!", show_alert=False)
+                await query.edit_message_text(
+                    f"✅ *Appointment Created!*\n\n"
+                    f"📅 *{details['title']}*\n"
+                    f"🕐 {details['appointment_datetime']}\n"
+                    f"📍 {details.get('location', 'No location')}",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=self.get_appointments_menu_keyboard()
+                )
             else:
-                await query.edit_message_text("❌ Failed to update item status.")
+                await query.answer("❌ Failed to save appointment.")
+                await query.edit_message_text(
+                    "❌ Failed to save appointment to database.",
+                    reply_markup=self.get_appointments_menu_keyboard()
+                )
+        
+        elif action == 'checklist':
+            details = context.user_data.pop('pending_checklist', None)
+            if not details:
+                await query.answer("❌ Error: Invitation expired.")
+                return
+            
+            # Actually create the checklist
+            checklist_id = self.db.create_checklist(
+                title=details['title'],
+                description=details.get('description', ''),
+                created_by_telegram_id=user_id
+            )
+            
+            if checklist_id:
+                items_added = []
+                for item_text in details['items']:
+                    if self.db.add_checklist_item(checklist_id, item_text):
+                        items_added.append(item_text)
+                
+                await query.answer("✅ Checklist created successfully!", show_alert=False)
+                await query.edit_message_text(
+                    f"✅ *Checklist Created!*\n\n"
+                    f"📋 *{details['title']}*\n"
+                    f"Items: {len(items_added)}",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=self.get_checklists_menu_keyboard()
+                )
+            else:
+                await query.answer("❌ Failed to create checklist.")
+                await query.edit_message_text(
+                    "❌ Failed to create checklist in database.",
+                    reply_markup=self.get_checklists_menu_keyboard()
+                )
+
+    async def _handle_cancel_callback(self, query, action, context):
+        """Handle cancellation callbacks."""
+        context.user_data.pop(f'pending_{action}', None)
+        await query.answer("❌ Creation cancelled.")
+        if action == 'appointment':
+            await query.edit_message_text("❌ Appointment creation cancelled.", reply_markup=self.get_appointments_menu_keyboard())
+        elif action == 'checklist':
+            await query.edit_message_text("❌ Checklist creation cancelled.", reply_markup=self.get_checklists_menu_keyboard())
+
+    async def _handle_toggle_item_callback(self, query, action, user_id):
+        """Handle toggle item callbacks."""
+        item_id = int(action)
+        success = self.checklist_manager.toggle_item(item_id, user_id)
+        
+        if success:
+            await query.answer("✅ Item status updated!")
+            
+            # Fetch item to get checklist ID
+            item = self.db.get_checklist_item(item_id)
+            if item:
+                checklist_id = item['checklist_id']
+                summary = await self.checklist_manager.get_checklist_summary(checklist_id)
+                
+                # Get toggle buttons
+                items = await self.checklist_manager.get_checklist_items(checklist_id)
+                keyboard = []
+                for item in items:
+                    status = "✅" if item['completed'] else "⬜"
+                    keyboard.append([InlineKeyboardButton(
+                        f"{status} {item['text']}", 
+                        callback_data=f"toggle_item:{item['id']}"
+                    )])
+                keyboard.append([InlineKeyboardButton("🔙 Back to Checklists", callback_data="menu:checklists")])
+                
+                await query.edit_message_text(
+                    summary,
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        else:
+            await query.answer("❌ Failed to update item status.", show_alert=True)
     
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle errors."""

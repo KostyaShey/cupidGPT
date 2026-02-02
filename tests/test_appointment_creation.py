@@ -77,7 +77,7 @@ class TestCreateAppointmentFromText:
             'success': True,
             'title': 'Meeting',
             'description': '',
-            'appointment_datetime': datetime(2026, 2, 1, 14, 0).isoformat(),
+            'appointment_datetime': datetime(2026, 3, 1, 14, 0).isoformat(),
             'location': '',
             'duration_minutes': 60
         })

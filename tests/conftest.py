@@ -45,7 +45,7 @@ def mock_llm_client():
             'success': True,
             'title': 'Test Appointment',
             'description': 'Test description',
-            'appointment_datetime': datetime(2026, 2, 1, 14, 0).isoformat(),
+            'appointment_datetime': datetime(2026, 3, 1, 14, 0).isoformat(),
             'location': 'Test Location',
             'duration_minutes': 60
         }
